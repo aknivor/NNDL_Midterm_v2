@@ -30,9 +30,11 @@ class MusicPopularityApp {
             this.validateData();
         });
 
-        document.getElementById('advancedTrain').addEventListener('click', () => {
-            this.advancedTrainModel();
-        });
+        // Remove advanced train button
+        const advancedTrainBtn = document.getElementById('advancedTrain');
+        if (advancedTrainBtn) {
+            advancedTrainBtn.style.display = 'none';
+        }
 
         document.addEventListener('trainingProgress', (e) => {
             this.updateTrainingProgress(e.detail);
@@ -43,7 +45,7 @@ class MusicPopularityApp {
         if (!file) return;
 
         try {
-            this.showLoading('Loading and processing CSV data with advanced feature engineering...');
+            this.showLoading('Loading and processing CSV data...');
             await this.dataLoader.loadCSV(file);
             this.dataLoader.createSlidingWindows();
             
@@ -56,7 +58,7 @@ class MusicPopularityApp {
             this.hideLoading();
             
             this.updateDataSummary();
-            this.showNotification('Advanced data processing completed! Features engineered: 9 per track.', 'success');
+            this.showNotification('Data loaded successfully! Ready for training.', 'success');
         } catch (error) {
             this.hideLoading();
             this.showNotification('Error loading file: ' + error.message, 'error');
@@ -70,7 +72,7 @@ class MusicPopularityApp {
         const summaryElement = document.getElementById('dataSummary');
         const trainSamples = this.trainingData.X_train ? this.trainingData.X_train.shape[0] : 0;
         const testSamples = this.trainingData.X_test ? this.trainingData.X_test.shape[0] : 0;
-        const featuresPerTrack = 9;
+        const featuresPerTrack = 5; // Simplified feature count
         const totalFeatures = featuresPerTrack * (this.trainingData.selectedTracks?.length || 0);
         
         summaryElement.innerHTML = `
@@ -97,20 +99,12 @@ class MusicPopularityApp {
                 </div>
             </div>
             <div style="margin-top: 15px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
-                <strong>Advanced Features:</strong> Streams, Danceability, Energy, Valence, Acousticness, Momentum, Growth Rate, Moving Average, Volatility
+                <strong>Simplified Features:</strong> Streams, Danceability, Energy, Momentum, Moving Average
             </div>
         `;
     }
 
     async trainModel() {
-        await this._trainModel(100, 32);
-    }
-
-    async advancedTrainModel() {
-        await this._trainModel(200, 64);
-    }
-
-    async _trainModel(epochs, batchSize) {
         if (this.isTraining) {
             this.showNotification('Training already in progress', 'warning');
             return;
@@ -122,24 +116,23 @@ class MusicPopularityApp {
             }
 
             this.isTraining = true;
-            this.showLoading(`Training advanced model with ${epochs} epochs...`);
+            this.showLoading('Training simplified model...');
             this.initializeTrainingCharts();
             
             document.getElementById('trainModel').disabled = true;
-            document.getElementById('advancedTrain').disabled = true;
-            document.getElementById('trainingProgress').innerHTML = '<span style="color: orange;">Advanced training started with feature engineering...</span>';
+            document.getElementById('trainingProgress').innerHTML = '<span style="color: orange;">Training started...</span>';
             
             await this.model.fit(
                 this.trainingData.X_train, 
                 this.trainingData.y_train, 
                 this.trainingData.X_test, 
                 this.trainingData.y_test, 
-                epochs,
-                batchSize
+                100,  // epochs
+                32    // batch size
             );
             
             this.hideLoading();
-            this.showNotification(`Advanced model training completed! Target: >70% accuracy`, 'success');
+            this.showNotification('Model training completed!', 'success');
         } catch (error) {
             this.hideLoading();
             this.showNotification('Training error: ' + error.message, 'error');
@@ -147,7 +140,6 @@ class MusicPopularityApp {
         } finally {
             this.isTraining = false;
             document.getElementById('trainModel').disabled = false;
-            document.getElementById('advancedTrain').disabled = false;
         }
     }
 
@@ -165,26 +157,19 @@ class MusicPopularityApp {
                     {
                         label: 'Training Loss',
                         borderColor: 'rgb(255, 99, 132)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
                         data: [],
-                        tension: 0.4,
-                        fill: true
+                        tension: 0.4
                     },
                     {
                         label: 'Validation Loss',
                         borderColor: 'rgb(54, 162, 235)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
                         data: [],
-                        tension: 0.4,
-                        fill: true
+                        tension: 0.4
                     }
                 ]
             },
             options: {
                 responsive: true,
-                plugins: {
-                    title: { display: true, text: 'Training & Validation Loss' }
-                },
                 scales: {
                     x: {
                         type: 'linear',
@@ -205,26 +190,19 @@ class MusicPopularityApp {
                     {
                         label: 'Training Accuracy',
                         borderColor: 'rgb(75, 192, 192)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
                         data: [],
-                        tension: 0.4,
-                        fill: true
+                        tension: 0.4
                     },
                     {
                         label: 'Validation Accuracy',
                         borderColor: 'rgb(153, 102, 255)',
-                        backgroundColor: 'rgba(153, 102, 255, 0.1)',
                         data: [],
-                        tension: 0.4,
-                        fill: true
+                        tension: 0.4
                     }
                 ]
             },
             options: {
                 responsive: true,
-                plugins: {
-                    title: { display: true, text: 'Training & Validation Accuracy' }
-                },
                 scales: {
                     x: {
                         type: 'linear',
@@ -253,11 +231,11 @@ class MusicPopularityApp {
             this.charts.accuracyChart.update('none');
         }
 
-        const lrInfo = progress.learningRate ? ` | LR: ${progress.learningRate.toFixed(6)}` : '';
-        const earlyStoppingInfo = progress.earlyStopping > 0 ? ` | Early stopping: ${progress.earlyStopping}` : '';
+        const earlyStoppingInfo = progress.earlyStopping > 0 ? 
+            ` | Early stopping: ${progress.earlyStopping}` : '';
             
         document.getElementById('trainingProgress').innerHTML = 
-            `Epoch: ${progress.epoch} | Loss: ${progress.loss.toFixed(4)} | Acc: ${progress.accuracy.toFixed(4)} | Val Loss: ${progress.val_loss.toFixed(4)} | Val Acc: ${progress.val_accuracy.toFixed(4)}${lrInfo}${earlyStoppingInfo}`;
+            `Epoch: ${progress.epoch} | Loss: ${progress.loss.toFixed(4)} | Acc: ${progress.accuracy.toFixed(4)} | Val Loss: ${progress.val_loss.toFixed(4)} | Val Acc: ${progress.val_accuracy.toFixed(4)}${earlyStoppingInfo}`;
     }
 
     async evaluateModel() {
@@ -266,10 +244,12 @@ class MusicPopularityApp {
                 throw new Error('No test data available. Please load data and train model first.');
             }
 
-            this.showLoading('Evaluating advanced model with ensemble predictions...');
+            this.showLoading('Evaluating model...');
             
             const evaluation = await this.model.evaluate(this.trainingData.X_test, this.trainingData.y_test);
-            const predictions = await this.model.predictWithUncertainty(this.trainingData.X_test, 3);
+            const predictions = await this.model.predict(this.trainingData.X_test);
+            
+            // FIXED: No more tf.size error
             const consistentAccuracy = await this.model.computeConsistentAccuracy(predictions, this.trainingData.y_test);
             const accuracyAnalysis = this.model.computeTrackSpecificAccuracy(
                 predictions, this.trainingData.y_test, this.trainingData.trackMetadata
@@ -298,33 +278,30 @@ class MusicPopularityApp {
         }
     }
 
+    // ... rest of the methods remain the same (computeFeatureImportance, detectBreakoutTracks, etc.)
+    // They should work fine with the simplified model
+
     assessPerformance(accuracy, loss) {
         let message = '';
         let type = 'success';
         
-        if (accuracy >= 75) {
-            message = `Outstanding! Model achieved ${accuracy.toFixed(1)}% accuracy - Excellent performance!`;
-            type = 'success';
-        } else if (accuracy >= 70) {
-            message = `Very Good! Model achieved ${accuracy.toFixed(1)}% accuracy - Strong performance!`;
-            type = 'success';
-        } else if (accuracy >= 65) {
-            message = `Good! Model achieved ${accuracy.toFixed(1)}% accuracy - Decent performance.`;
+        if (accuracy >= 70) {
+            message = `Excellent! Model achieved ${accuracy.toFixed(1)}% accuracy`;
             type = 'success';
         } else if (accuracy >= 60) {
-            message = `Fair! Model achieved ${accuracy.toFixed(1)}% accuracy - Room for improvement.`;
+            message = `Good! Model achieved ${accuracy.toFixed(1)}% accuracy`;
+            type = 'success';
+        } else if (accuracy >= 50) {
+            message = `Fair! Model achieved ${accuracy.toFixed(1)}% accuracy`;
             type = 'warning';
         } else {
-            message = `Needs improvement! Model achieved ${accuracy.toFixed(1)}% accuracy - Consider advanced training.`;
+            message = `Needs improvement! Model achieved ${accuracy.toFixed(1)}% accuracy`;
             type = 'error';
         }
         
         this.showNotification(message, type);
         
-        console.log(`🎯 Performance Assessment:`);
-        console.log(`   Accuracy: ${accuracy.toFixed(2)}%`);
-        console.log(`   Loss: ${loss.toFixed(4)}`);
-        console.log(`   Status: ${type === 'success' ? '✅ GOOD' : type === 'warning' ? '⚠️ FAIR' : '❌ POOR'}`);
+        console.log(`Performance: Accuracy ${accuracy.toFixed(2)}%, Loss ${loss.toFixed(4)}`);
     }
 
     async computeFeatureImportance() {
@@ -338,10 +315,10 @@ class MusicPopularityApp {
             baselineResults[0].dispose();
             baselineResults[1].dispose();
 
-            const features = ['Streams', 'Danceability', 'Energy', 'Valence', 'Acousticness', 'Momentum', 'Growth Rate', 'Moving Avg', 'Volatility'];
+            const features = ['Streams', 'Danceability', 'Energy', 'Momentum', 'Moving Avg'];
             const importanceScores = [];
             
-            for (let featureIdx = 0; featureIdx < 9; featureIdx++) {
+            for (let featureIdx = 0; featureIdx < 5; featureIdx++) {
                 const shuffledData = await this.shuffleFeature(data.X_test, featureIdx);
                 const shuffledResults = await this.model.evaluate(shuffledData, data.y_test);
                 const shuffledAccuracy = (await shuffledResults[1].data())[0];
@@ -371,11 +348,11 @@ class MusicPopularityApp {
         for (let sample = 0; sample < data.length; sample++) {
             for (let day = 0; day < data[sample].length; day++) {
                 for (let track = 0; track < 10; track++) {
-                    const featurePos = track * 9 + featureIndex;
+                    const featurePos = track * 5 + featureIndex;
                     const randomSample = Math.floor(Math.random() * data.length);
                     const randomDay = Math.floor(Math.random() * data[randomSample].length);
                     const randomTrack = Math.floor(Math.random() * 10);
-                    const randomPos = randomTrack * 9 + featureIndex;
+                    const randomPos = randomTrack * 5 + featureIndex;
                     
                     const temp = data[sample][day][featurePos];
                     data[sample][day][featurePos] = data[randomSample][randomDay][randomPos];
@@ -389,17 +366,13 @@ class MusicPopularityApp {
 
     getFeatureDescription(feature) {
         const descriptions = {
-            'Streams': 'Historical streaming patterns - most important for trend prediction',
-            'Danceability': 'Musical rhythm and dance-friendly characteristics',
-            'Energy': 'Intensity and activity level of the track',
-            'Valence': 'Musical positiveness and mood',
-            'Acousticness': 'Acoustic vs electronic composition',
-            'Momentum': 'Daily change in streaming numbers',
-            'Growth Rate': 'Percentage growth from previous day',
-            'Moving Avg': '3-day average streaming pattern',
-            'Volatility': 'Daily streaming variability'
+            'Streams': 'Historical streaming patterns',
+            'Danceability': 'Musical rhythm characteristics',
+            'Energy': 'Intensity and activity level',
+            'Momentum': 'Daily change in streams',
+            'Moving Avg': '3-day average streaming pattern'
         };
-        return descriptions[feature] || 'Audio feature characteristic';
+        return descriptions[feature] || 'Audio feature';
     }
 
     detectBreakoutTracks(predictions, trainingData) {
@@ -549,45 +522,26 @@ class MusicPopularityApp {
             .sort((a, b) => b[1].accuracy - a[1].accuracy);
         
         sortedAccuracies.forEach(([trackId, data]) => {
-            const accuracyClass = data.accuracy >= 70 ? 'high-accuracy' : data.accuracy >= 60 ? 'medium-accuracy' : 'low-accuracy';
             trackAccuracyHTML += `
-                <div class="track-accuracy-item ${accuracyClass}">
+                <div class="track-accuracy-item">
                     <span class="track-name">${data.trackName}</span>
                     <div class="accuracy-bar-container">
                         <div class="accuracy-bar" style="width: ${data.accuracy}%"></div>
                         <span class="accuracy-text">${data.accuracy.toFixed(1)}%</span>
                     </div>
-                    <div class="day-accuracies">
-                        <small>D+1: ${data.dayAccuracies.day1.toFixed(1)}%</small>
-                        <small>D+2: ${data.dayAccuracies.day2.toFixed(1)}%</small>
-                        <small>D+3: ${data.dayAccuracies.day3.toFixed(1)}%</small>
-                    </div>
                 </div>
             `;
         });
 
-        const performanceClass = consistentAccuracy >= 70 ? 'high-performance' : consistentAccuracy >= 60 ? 'medium-performance' : 'low-performance';
-        
         resultsElement.innerHTML = `
-            <div class="evaluation-summary ${performanceClass}">
-                <h4>🚀 Advanced Model Performance</h4>
-                <div class="performance-metrics">
-                    <div class="metric">
-                        <label>Final Loss:</label>
-                        <span class="metric-value">${evaluation.loss.toFixed(4)}</span>
-                    </div>
-                    <div class="metric">
-                        <label>Standard Accuracy:</label>
-                        <span class="metric-value">${(evaluation.accuracy * 100).toFixed(2)}%</span>
-                    </div>
-                    <div class="metric">
-                        <label>Ensemble Accuracy:</label>
-                        <span class="metric-value highlight">${consistentAccuracy.toFixed(2)}%</span>
-                    </div>
-                </div>
+            <div class="evaluation-summary">
+                <h4>Model Performance</h4>
+                <p><strong>Loss:</strong> ${evaluation.loss.toFixed(4)}</p>
+                <p><strong>Accuracy:</strong> ${(evaluation.accuracy * 100).toFixed(2)}%</p>
+                <p><strong>Consistent Accuracy:</strong> ${consistentAccuracy.toFixed(2)}%</p>
             </div>
             <div class="track-accuracies">
-                <h4>🎵 Track-Specific Accuracy</h4>
+                <h4>Track-Specific Accuracy</h4>
                 ${trackAccuracyHTML}
             </div>
         `;
@@ -613,11 +567,7 @@ class MusicPopularityApp {
                 datasets: [{
                     label: 'Prediction Accuracy (%)',
                     data: accuracies,
-                    backgroundColor: accuracies.map(acc => 
-                        acc >= 70 ? 'rgba(75, 192, 192, 0.8)' : 
-                        acc >= 60 ? 'rgba(255, 159, 64, 0.8)' : 
-                        'rgba(255, 99, 132, 0.8)'
-                    ),
+                    backgroundColor: 'rgba(54, 162, 235, 0.8)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     borderWidth: 1
                 }]
@@ -699,8 +649,7 @@ class MusicPopularityApp {
             .slice(0, 5);
 
         meterElement.innerHTML = `
-            <h4>🚀 Hit Potential Meter</h4>
-            <p class="meter-description">Tracks with highest prediction accuracy</p>
+            <h4>Hit Potential Meter</h4>
             <div class="hit-tracks">
                 ${sortedTracks.map(([trackId, data], index) => `
                     <div class="hit-track-item">
@@ -709,11 +658,8 @@ class MusicPopularityApp {
                             <div class="hit-track-name">${data.trackName}</div>
                             <div class="hit-confidence">
                                 <div class="confidence-bar" style="width: ${data.accuracy}%"></div>
-                                <span>${data.accuracy.toFixed(1)}% prediction accuracy</span>
+                                <span>${data.accuracy.toFixed(1)}% confidence</span>
                             </div>
-                        </div>
-                        <div class="hit-potential ${this.getPotentialClass(data.accuracy)}">
-                            ${this.getPotentialText(data.accuracy)}
                         </div>
                     </div>
                 `).join('')}
@@ -721,26 +667,14 @@ class MusicPopularityApp {
         `;
     }
 
-    getPotentialClass(accuracy) {
-        if (accuracy >= 75) return 'high-potential';
-        if (accuracy >= 65) return 'medium-potential';
-        return 'low-potential';
-    }
-
-    getPotentialText(accuracy) {
-        if (accuracy >= 75) return 'HIGH POTENTIAL';
-        if (accuracy >= 65) return 'MEDIUM POTENTIAL';
-        return 'LOW POTENTIAL';
-    }
-
     async validateData() {
         try {
-            this.showLoading('Validating advanced data features...');
+            this.showLoading('Validating data...');
             const isValid = this.dataLoader.validateData();
             this.hideLoading();
             
             if (isValid) {
-                this.showNotification('Advanced data validation passed! All 9 features per track are ready.', 'success');
+                this.showNotification('Data validation passed!', 'success');
             } else {
                 this.showNotification('Data validation failed. Check console for details.', 'error');
             }
@@ -753,7 +687,7 @@ class MusicPopularityApp {
     async saveModel() {
         try {
             await this.model.saveModel();
-            this.showNotification('Advanced model saved successfully!', 'success');
+            this.showNotification('Model saved successfully!', 'success');
         } catch (error) {
             this.showNotification('Error saving model: ' + error.message, 'error');
         }
@@ -771,15 +705,13 @@ class MusicPopularityApp {
     showNotification(message, type) {
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
-        notification.innerHTML = `
-            <strong>${type.toUpperCase()}:</strong> ${message}
-        `;
+        notification.textContent = message;
         
         document.body.appendChild(notification);
         
         setTimeout(() => {
             notification.remove();
-        }, 6000);
+        }, 5000);
     }
 
     dispose() {

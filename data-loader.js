@@ -91,25 +91,22 @@ class DataLoader {
         this.selectedTracks.forEach(trackId => {
             const trackData = this.data.filter(d => d.track_id === trackId).sort((a, b) => a.date.localeCompare(b.date));
             
+            // Simple momentum features
             for (let i = 1; i < trackData.length; i++) {
                 trackData[i].streams_momentum = trackData[i].streams - trackData[i-1].streams;
-                trackData[i].streams_growth_rate = trackData[i-1].streams > 0 ? 
-                    (trackData[i].streams - trackData[i-1].streams) / trackData[i-1].streams : 0;
             }
             
+            // Simple moving average
             for (let i = 2; i < trackData.length; i++) {
                 trackData[i].streams_ma3 = (trackData[i].streams + trackData[i-1].streams + trackData[i-2].streams) / 3;
-                trackData[i].volatility = Math.abs(trackData[i].streams_momentum / (trackData[i].streams_ma3 || 1));
             }
             
+            // Fill initial values
             trackData[0].streams_momentum = 0;
-            trackData[0].streams_growth_rate = 0;
             trackData[0].streams_ma3 = trackData[0].streams;
-            trackData[0].volatility = 0;
             
             if (trackData[1]) {
                 trackData[1].streams_ma3 = (trackData[1].streams + trackData[0].streams) / 2;
-                trackData[1].volatility = Math.abs(trackData[1].streams_momentum / (trackData[1].streams_ma3 || 1));
             }
         });
     }
@@ -150,8 +147,9 @@ class DataLoader {
         
         this.selectedTracks.forEach(trackId => {
             const trackData = this.data.filter(d => d.track_id === trackId && trainingDates.has(d.date));
-            const features = ['streams', 'danceability', 'energy', 'valence', 'acousticness', 
-                             'streams_momentum', 'streams_growth_rate', 'streams_ma3', 'volatility'];
+            
+            // SIMPLIFIED: Only use key features
+            const features = ['streams', 'danceability', 'energy', 'streams_momentum', 'streams_ma3'];
             const params = {};
             
             features.forEach(feature => {
@@ -171,26 +169,19 @@ class DataLoader {
         this.data.forEach(entry => {
             const params = this.normalizationParams.get(entry.track_id);
             if (params) {
+                // Core features only
                 entry.streams_normalized = this.minMaxNormalize(entry.streams, params.streams);
                 entry.danceability_normalized = this.minMaxNormalize(entry.danceability, params.danceability);
                 entry.energy_normalized = this.minMaxNormalize(entry.energy, params.energy);
-                entry.valence_normalized = this.minMaxNormalize(entry.valence, params.valence);
-                entry.acousticness_normalized = this.minMaxNormalize(entry.acousticness, params.acousticness);
                 entry.streams_momentum_normalized = this.minMaxNormalize(entry.streams_momentum || 0, params.streams_momentum);
-                entry.streams_growth_rate_normalized = this.minMaxNormalize(entry.streams_growth_rate || 0, params.streams_growth_rate);
                 entry.streams_ma3_normalized = this.minMaxNormalize(entry.streams_ma3 || entry.streams, params.streams_ma3);
-                entry.volatility_normalized = this.minMaxNormalize(entry.volatility || 0, params.volatility);
             } else {
-                const fallbackNormalize = (val) => (val - (-100)) / (100 - (-100));
-                entry.streams_normalized = fallbackNormalize(entry.streams);
-                entry.danceability_normalized = entry.danceability;
-                entry.energy_normalized = entry.energy;
-                entry.valence_normalized = entry.valence;
-                entry.acousticness_normalized = entry.acousticness;
+                // Fallback
+                entry.streams_normalized = 0.5;
+                entry.danceability_normalized = 0.5;
+                entry.energy_normalized = 0.5;
                 entry.streams_momentum_normalized = 0.5;
-                entry.streams_growth_rate_normalized = 0.5;
-                entry.streams_ma3_normalized = fallbackNormalize(entry.streams);
-                entry.volatility_normalized = 0.5;
+                entry.streams_ma3_normalized = 0.5;
             }
         });
     }
@@ -220,12 +211,6 @@ class DataLoader {
                 if (target && target.length === this.selectedTracks.length * 3) {
                     samples.push(sample);
                     targets.push(target);
-                    
-                    for (let aug = 0; aug < 2; aug++) {
-                        const augmentedSample = this.augmentSample(sample);
-                        samples.push(augmentedSample);
-                        targets.push(target);
-                    }
                 }
             }
         }
@@ -242,19 +227,16 @@ class DataLoader {
             for (const trackId of this.selectedTracks) {
                 const entry = this.data.find(d => d.date === date && d.track_id === trackId);
                 if (entry) {
+                    // SIMPLIFIED: Only 5 features per track instead of 9
                     dayFeatures.push(
                         entry.streams_normalized || 0,
                         entry.danceability_normalized || 0,
                         entry.energy_normalized || 0,
-                        entry.valence_normalized || 0,
-                        entry.acousticness_normalized || 0,
                         entry.streams_momentum_normalized || 0,
-                        entry.streams_growth_rate_normalized || 0,
-                        entry.streams_ma3_normalized || 0,
-                        entry.volatility_normalized || 0
+                        entry.streams_ma3_normalized || 0
                     );
                 } else {
-                    dayFeatures.push(0, 0, 0, 0, 0, 0, 0, 0, 0);
+                    dayFeatures.push(0, 0, 0, 0, 0);
                 }
             }
             
@@ -262,15 +244,6 @@ class DataLoader {
         }
 
         return sample.length === windowDates.length ? sample : null;
-    }
-
-    augmentSample(sample) {
-        return sample.map(day => 
-            day.map(feature => {
-                const noise = (Math.random() - 0.5) * 0.1;
-                return Math.max(0, Math.min(1, feature + noise));
-            })
-        );
     }
 
     createTarget(currentDate) {
@@ -289,9 +262,8 @@ class DataLoader {
                 const futureEntry = this.data.find(d => d.date === futureDate && d.track_id === trackId);
                 
                 if (futureEntry) {
-                    const increaseRatio = (futureEntry.streams - currentStreams) / (currentStreams || 1);
-                    const probability = 1 / (1 + Math.exp(-increaseRatio * 10));
-                    target.push(probability);
+                    // BINARY TARGET: 1 if increase, 0 if decrease
+                    target.push(futureEntry.streams > currentStreams ? 1 : 0);
                 } else {
                     return null;
                 }
@@ -307,7 +279,7 @@ class DataLoader {
         console.log(`Total samples: ${samples.length}`);
         console.log(`Training samples: ${splitIndex}`);
         console.log(`Test samples: ${samples.length - splitIndex}`);
-        console.log(`Features per track: 9, Total features: ${9 * this.selectedTracks.length}`);
+        console.log(`Features per track: 5, Total features: ${5 * this.selectedTracks.length}`);
         
         this.X_train = tf.tensor3d(samples.slice(0, splitIndex));
         this.y_train = tf.tensor2d(targets.slice(0, splitIndex));
@@ -319,8 +291,10 @@ class DataLoader {
 
     logDataStatistics() {
         if (this.X_train && this.y_train) {
-            const trainMean = this.y_train.mean().dataSync()[0];
-            console.log(`Training set - Average target probability: ${trainMean.toFixed(4)}`);
+            const trainPositives = this.y_train.sum().dataSync()[0];
+            const trainTotal = this.y_train.shape[0] * this.y_train.shape[1];
+            const trainPositiveRatio = (trainPositives / trainTotal) * 100;
+            console.log(`Training set - Positive samples: ${trainPositiveRatio.toFixed(2)}%`);
         }
     }
 
@@ -356,4 +330,4 @@ class DataLoader {
         if (this.X_test) this.X_test.dispose();
         if (this.y_test) this.y_test.dispose();
     }
-}
+} 

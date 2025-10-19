@@ -269,4 +269,4 @@ class GRUModel {
             this.bestWeights.forEach(w => w.dispose());
         }
     }
-}
+} 
